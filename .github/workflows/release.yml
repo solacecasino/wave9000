@@ -1,0 +1,279 @@
+# Builds and tests wave9000 on every system it runs on: macOS (one
+# universal app, also run on an Intel Mac), Windows (x64 and Arm) and Linux
+# (x64 and Arm). Every machine runs the tests with ffmpeg installed, so every
+# export format is written through the real ffmpeg and read back. Then each
+# download is unpacked and started with the sample session, and a screenshot
+# is kept. Pushing a tag like v0.0.3 also publishes a GitHub release with
+# every download, using docs/releases/<tag>.md as the notes; any other push
+# runs the same checks without releasing, and a newer push cancels an older
+# run of the same branch.
+name: Release
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: write
+
+env:
+  # Tests that need ffmpeg fail, rather than skip.
+  WAVE9000_REQUIRE_FFMPEG: "1"
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: ffmpeg
+        run: brew install ffmpeg
+      - name: Test
+        run: cargo test
+      - name: Package
+        run: scripts/package.sh
+      - name: Check the download
+        run: |
+          set -e
+          rm -rf x && ditto -x -k dist/wave9000-*-macos-universal.zip x
+          app=x/wave9000.app/Contents/MacOS/wave9000
+          lipo -archs "$app" | grep -q x86_64
+          lipo -archs "$app" | grep -q arm64
+          codesign -v x/wave9000.app
+          plutil -p x/wave9000.app/Contents/Info.plist | grep -q NSMicrophoneUsageDescription
+          "$app" --version
+      - name: Screenshot with the sample session
+        timeout-minutes: 3
+        run: |
+          mkdir -p shots
+          export WAVE9000_CONFIG_DIR=$(python3 scripts/sample.py sample | tail -1)
+          x/wave9000.app/Contents/MacOS/wave9000 &
+          pid=$!
+          sleep 8
+          kill -0 $pid
+          screencapture -x shots/macos.png
+          kill $pid
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wave9000-macos
+          path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-macos
+          path: shots/
+
+  # The universal download's Intel half, on an Intel Mac.
+  intel:
+    needs: mac
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: ffmpeg
+        run: brew install ffmpeg
+      - uses: actions/download-artifact@v4
+        with:
+          name: wave9000-macos
+          path: dist
+      - name: Test, built for Intel, and the download's Intel half
+        run: |
+          set -e
+          uname -m
+          rm -rf x && ditto -x -k dist/wave9000-*-macos-universal.zip x
+          arch -x86_64 x/wave9000.app/Contents/MacOS/wave9000 --version
+          cargo test
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, arch: x64, ffmpeg: win64 }
+          - { os: windows-11-arm, arch: arm64, ffmpeg: winarm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: ffmpeg (BtbN's builds, for this processor)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ffmpeg && cd ffmpeg
+          gh release download latest --repo BtbN/FFmpeg-Builds -p "ffmpeg-master-latest-${{ matrix.ffmpeg }}-gpl.zip"
+          unzip -q ffmpeg-*.zip
+          echo "$(cygpath -w "$(echo $PWD/ffmpeg-*/bin)")" >> "$GITHUB_PATH"
+      - name: Test
+        shell: bash
+        run: |
+          ffmpeg -version | head -1
+          cargo test
+      - name: Package
+        shell: bash
+        run: |
+          scripts/package.sh
+          # Every file named for this machine, or the release would mix them up.
+          for f in dist/*; do case "$f" in *-${{ matrix.arch }}.*) ;; *) echo "::error::$f isn't named ${{ matrix.arch }}"; exit 1 ;; esac; done
+      - name: Check the download
+        shell: bash
+        run: |
+          set -e
+          rm -rf x && mkdir x && cd x && unzip -q ../dist/wave9000-*-windows-*.zip
+          ls -R
+          ./wave9000.exe --version
+      # Arm runners sit on Windows' first-run privacy screen, over everything.
+      - name: Screenshot with the sample session
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $env:WAVE9000_CONFIG_DIR = (python scripts/sample.py sample | Select-Object -Last 1)
+          $p = Start-Process -FilePath x\wave9000.exe -PassThru
+          Start-Sleep 10
+          if ($p.HasExited) { throw "wave9000 exited: $($p.ExitCode)" }
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $img = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($img)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $img.Save("shots\windows-${{ matrix.arch }}.png")
+          Stop-Process -Id $p.Id
+          Get-ChildItem $env:WAVE9000_CONFIG_DIR
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wave9000-windows-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-windows-${{ matrix.arch }}
+          if-no-files-found: ignore
+          path: shots/
+
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, arch: x64, ffmpeg: linux64 }
+          - { os: ubuntu-22.04-arm, arch: arm64, ffmpeg: linuxarm64 }
+    runs-on: ${{ matrix.os }}   # an older glibc, so it runs on more distros
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          # ALSA to build the sound code against; a screen to run on, and
+          # what the screenshot and menu checks use.
+          sudo apt-get install -y pkg-config libasound2-dev libxkbcommon-x11-0 xvfb openbox imagemagick xdotool desktop-file-utils
+      # Ubuntu 22.04's own ffmpeg is 4.4; BtbN's is current, as people have.
+      - name: ffmpeg (BtbN's builds, for this processor)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ffmpeg && cd ffmpeg
+          gh release download latest --repo BtbN/FFmpeg-Builds -p "ffmpeg-master-latest-${{ matrix.ffmpeg }}-gpl.tar.xz"
+          tar xf ffmpeg-*.tar.xz
+          echo "$(echo $PWD/ffmpeg-*/bin)" >> "$GITHUB_PATH"
+      - name: Test
+        run: |
+          ffmpeg -version | head -1
+          cargo test
+      - name: Package
+        run: |
+          scripts/package.sh
+          for f in dist/*; do case "$f" in *-${{ matrix.arch }}.*) ;; *) echo "::error::$f isn't named ${{ matrix.arch }}"; exit 1 ;; esac; done
+      - name: Check the download and its app menu entry
+        run: |
+          set -e
+          mkdir -p x && tar xzf dist/wave9000-*-linux-*.tar.gz -C x
+          app=$(echo x/wave9000-*/wave9000)
+          "$app" --version
+          # It needs only ALSA's library at run time, which every desktop has.
+          ldd "$app" | grep -E "asound|not found"
+          ! ldd "$app" | grep -q "not found"
+          export HOME=$PWD/home XDG_DATA_HOME=$PWD/home/.local/share
+          mkdir -p "$HOME"
+          x/wave9000-*/install.sh
+          desktop-file-validate "$XDG_DATA_HOME/applications/wave9000.desktop"
+          test -f "$XDG_DATA_HOME/icons/hicolor/256x256/apps/wave9000.png"
+          exe=$(sed -n 's/^Exec="\(.*\)" %f$/\1/p' "$XDG_DATA_HOME/applications/wave9000.desktop")
+          "$exe" --version
+          x/wave9000-*/install.sh --remove
+          test ! -e "$XDG_DATA_HOME/applications/wave9000.desktop"
+      - name: Screenshot with the sample session
+        timeout-minutes: 3
+        run: |
+          mkdir -p shots
+          export DISPLAY=:99 WAVE9000_CONFIG_DIR=$(python3 scripts/sample.py sample | tail -1)
+          Xvfb :99 -screen 0 1440x900x24 &
+          sleep 2
+          openbox &
+          sleep 1
+          app=$(echo x/wave9000-*/wave9000)
+          "$app" &
+          pid=$!
+          # Wait for the window itself, not a fixed time.
+          for i in $(seq 60); do
+            xdotool search --onlyvisible --name wave9000 >/dev/null && break
+            kill -0 $pid
+            sleep 0.5
+          done
+          xdotool search --onlyvisible --name wave9000 || { echo "::error::no wave9000 window after 30 s"; exit 1; }
+          echo "window after $i tries"
+          sleep 4
+          import -window root "shots/linux-${{ matrix.arch }}.png"
+          kill $pid
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wave9000-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-linux-${{ matrix.arch }}
+          path: shots/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [mac, intel, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wave9000-*
+      - name: Gather, refusing two files with the same name
+        run: |
+          mkdir out
+          for f in dist/*/*; do
+            [ -e "out/${f##*/}" ] && { echo "::error::two builds made ${f##*/}"; exit 1; }
+            mv "$f" out/
+          done
+          ls -l out
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          notes="docs/releases/${tag}.md"
+          if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
+          gh release create "$tag" out/* --title "wave9000 ${tag#v}" "$@"

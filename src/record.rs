@@ -67,8 +67,8 @@ pub struct Live {
     /// Samples the ring had no room for (the disk fell behind).
     pub dropped: AtomicU64,
     /// Whether any sample so far wasn't exactly zero. A real input always
-    /// hisses a little; macOS sends pure silence when the microphone isn't
-    /// allowed.
+    /// hisses a little; macOS and Windows send pure silence when the
+    /// microphone isn't allowed.
     pub heard: AtomicBool,
     /// What the input reported (see `engine::Trouble`).
     pub trouble: Trouble,

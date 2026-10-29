@@ -1,8 +1,8 @@
 //! Notices changes in the config folder, so an edited keys.toml or
 //! settings.toml or layout.toml applies straight away. A thread sleeps in the system's own
-//! file-change call (kqueue on macOS, inotify on Linux), so watching costs
-//! nothing while nothing changes. Windows has no watcher yet: wave9000 looks
-//! again whenever its window comes to the front.
+//! file-change call (kqueue on macOS, inotify on Linux, change
+//! notifications on Windows), so watching costs nothing while nothing
+//! changes.
 
 use std::path::Path;
 
@@ -94,12 +94,54 @@ mod imp {
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(windows)]
+mod imp {
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::Path;
+    use std::time::Duration;
+
+    type Handle = *mut std::ffi::c_void;
+    const FILE_NOTIFY_CHANGE_FILE_NAME: u32 = 0x1;
+    const FILE_NOTIFY_CHANGE_LAST_WRITE: u32 = 0x10;
+    const INFINITE: u32 = 0xFFFF_FFFF;
+    const WAIT_OBJECT_0: u32 = 0;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn FindFirstChangeNotificationW(path: *const u16, subtree: i32, filter: u32) -> Handle;
+        fn FindNextChangeNotification(handle: Handle) -> i32;
+        fn FindCloseChangeNotification(handle: Handle) -> i32;
+        fn WaitForSingleObject(handle: Handle, ms: u32) -> u32;
+    }
+
+    pub fn watch(dir: &Path, changed: impl Fn()) {
+        let wide: Vec<u16> = dir.as_os_str().encode_wide().chain(Some(0)).collect();
+        // SAFETY: a change-notification handle opened, waited on and closed
+        // here; `wide` is a NUL-terminated path that outlives the call.
+        unsafe {
+            let h = FindFirstChangeNotificationW(wide.as_ptr(), 0, FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE);
+            // INVALID_HANDLE_VALUE is -1.
+            if h.is_null() || h as isize == -1 {
+                return;
+            }
+            while WaitForSingleObject(h, INFINITE) == WAIT_OBJECT_0 {
+                std::thread::sleep(Duration::from_millis(100));
+                changed();
+                if FindNextChangeNotification(h) == 0 {
+                    break;
+                }
+            }
+            FindCloseChangeNotification(h);
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 mod imp {
     pub fn watch(_: &std::path::Path, _: impl Fn()) {}
 }
 
-#[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
+#[cfg(all(test, any(target_os = "macos", target_os = "linux", windows)))]
 mod tests {
     use std::sync::mpsc;
     use std::time::Duration;

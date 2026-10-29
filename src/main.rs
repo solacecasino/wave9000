@@ -1083,7 +1083,7 @@ impl App {
             self.say("The sound input went away, so recording stopped. What was recorded is kept.");
         } else if silent && !self.silence_warned {
             self.silence_warned = true;
-            self.say("Nothing at all is coming from the input. If macOS asked about the microphone and it wasn't allowed, allow wave9000 in System Settings → Privacy & Security → Microphone, then record again.");
+            self.say(SILENT_INPUT);
         }
     }
 
@@ -1269,6 +1269,16 @@ impl shell::App for App {
         }
     }
 }
+
+/// Said when an input gives nothing but exact zeros: how each system
+/// answers when the microphone isn't allowed, or is muted.
+const SILENT_INPUT: &str = if cfg!(target_os = "macos") {
+    "Nothing at all is coming from the input. If macOS asked about the microphone and it wasn't allowed, allow wave9000 in System Settings → Privacy & Security → Microphone, then record again."
+} else if cfg!(windows) {
+    "Nothing at all is coming from the input. Check that Windows lets apps use the microphone (Settings → Privacy & security → Microphone) and that the input isn't muted, then record again."
+} else {
+    "Nothing at all is coming from the input. Check that it isn't muted (in your sound settings or alsamixer) and that it's the input you meant (`input` in settings.toml), then record again."
+};
 
 /// "a dropout", "3 dropouts".
 pub fn dropouts_text(n: u64) -> String {

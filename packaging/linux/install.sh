@@ -30,7 +30,7 @@ cp "$here/wave9000.png" "$icons/wave9000.png"
 # a backslash (written twice, since the file's own strings unescape one),
 # and % is doubled.
 exec_path=$(printf '%s' "$here/wave9000" | sed -e 's/[\\"`$]/\\\\&/g' -e 's/%/%%/g')
-WAVE_EXEC="Exec=\"$exec_path\"" awk '/^Exec=/ { print ENVIRON["WAVE_EXEC"]; next } { print }' \
+WAVE_EXEC="Exec=\"$exec_path\" %f" awk '/^Exec=/ { print ENVIRON["WAVE_EXEC"]; next } { print }' \
   "$here/wave9000.desktop" > "$apps/wave9000.desktop"
 chmod 644 "$apps/wave9000.desktop"
 refresh
