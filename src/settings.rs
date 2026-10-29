@@ -64,6 +64,8 @@ pub struct Look {
     pub panel_headers: bool,
     /// Each track's height on the Tracks panel, in points.
     pub track_height: f32,
+    /// How often the playhead and meters are drawn while playing, a second.
+    pub playback_fps: f32,
 }
 
 impl Default for Export {
@@ -80,7 +82,7 @@ impl Default for Edit {
 
 impl Default for Look {
     fn default() -> Self {
-        Self { dark: true, accent: "#3fb8ff".into(), font_size: 13.0, panel_headers: true, track_height: 72.0 }
+        Self { dark: true, accent: "#3fb8ff".into(), font_size: 13.0, panel_headers: true, track_height: 72.0, playback_fps: 30.0 }
     }
 }
 
@@ -140,6 +142,9 @@ font_size = 13
 # Edit Layout (cmd+L) to move panels.
 panel_headers = true
 track_height = 72
+# How many times a second the playhead and meters move while playing.
+# Each frame costs a little CPU: 60 is smoother, 15 is lighter.
+playback_fps = 30
 "##;
 
 #[cfg(test)]
@@ -149,7 +154,7 @@ mod tests {
     #[test]
     fn example_parses_and_half_files_work() {
         let s: Settings = toml::from_str(EXAMPLE).unwrap();
-        assert_eq!(s.export.bits, 24);
+        assert_eq!((s.export.bits, s.look.playback_fps), (24, 30.0));
         let s: Settings = toml::from_str("[export]\nbits = 16\nsomething_new = 1").unwrap();
         assert_eq!((s.export.bits, s.export.format.as_str(), s.edit.nudge), (16, "wav", 0.1));
         assert_eq!(Look { accent: "#ff0000".into(), ..Look::default() }.accent(), egui::Color32::RED);

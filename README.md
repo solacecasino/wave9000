@@ -9,7 +9,7 @@ and opens its projects. Its sister is
 
 ![wave9000](docs/screenshot.png)
 
-It's a prototype (0.0.1): tracks, clips, a mixer, recording, export.
+It's a prototype (0.0.2): tracks, clips, a mixer, recording, export.
 Nothing else is in the app.
 
 ## Installing
@@ -18,17 +18,20 @@ Nothing else is in the app.
    [Releases](https://github.com/solacecasino/wave9000/releases) (Apple
    Silicon and Intel Macs, macOS 11 or later).
 2. Unzip it and move wave9000.app to Applications.
-3. The first time, **right-click → Open**: the app isn't signed with an
-   Apple developer certificate, so macOS asks once. The first time you
-   record, macOS asks to let it use the microphone.
+3. The first time, macOS says it can't check the app: it isn't signed with
+   an Apple developer certificate. Open **System Settings → Privacy &
+   Security**, scroll down to wave9000 and click **Open Anyway** (on macOS
+   14 and earlier, **right-click → Open** does the same). Or run
+   `xattr -dr com.apple.quarantine /Applications/wave9000.app`. The first
+   time you record, macOS asks to let it use the microphone.
 4. Install [ffmpeg](https://ffmpeg.org) to add files other than WAV:
    `brew install ffmpeg`. wave9000 runs it as a separate program for
    reading and writing files, so no codecs are built in. Without it,
    recording, WAV files at your sound device's rate and WAV export still
    work.
 
-Windows and Linux build from the same code (`cargo build --release`) but
-have no downloads yet.
+Windows and Linux build from the same code (`cargo build --release`);
+their downloads are planned for 0.0.3.
 
 ## Making something
 
@@ -84,7 +87,7 @@ A panel can be shown more than once.
 wave9000 has only what you need, and adapters add the rest: commands,
 panels and export formats. Drop an adapter's zip on the window to install
 it; wave9000 shows what it adds and what it may do first, and never goes
-online itself. None come with 0.0.1. To make one, see
+online itself. None come with wave9000 yet. To make one, see
 [docs/adapters.md](docs/adapters.md).
 
 ## Customizing
@@ -94,7 +97,7 @@ There's no settings window. Everything is in plain text files in one folder
 
 | File | What it holds |
 |---|---|
-| `settings.toml` | sound output and input, recording, export format, ffmpeg's path, colors, track height |
+| `settings.toml` | sound output and input, recording, export format, ffmpeg's path, colors, track height, how smoothly the playhead moves |
 | `keys.toml` | any key for any command (see the Help panel for the list) |
 | `layout.toml` | the panels and where they are |
 | `adapters/` | installed adapters |
@@ -110,7 +113,7 @@ your sound outputs and inputs by name when wave9000 starts. Where it is:
 
 ## Measured
 
-On an M-series MacBook Air, release build, 2026-10-29:
+On an M-series MacBook Air, release build, 2026-10-29 (0.0.2):
 
 | | |
 |---|---|
@@ -118,7 +121,7 @@ On an M-series MacBook Air, release build, 2026-10-29:
 | Memory, fresh start | 56 MB (physical footprint) |
 | Memory, 4 tracks of the sample project at 96 kHz | 84 MB |
 | CPU when idle | 0.0% |
-| Playing those 4 tracks | about 21% of one core, nearly all of it drawing the moving playhead and meters |
+| Playing those 4 tracks | about 17% of one core at the default 30 frames a second (23% at 60), most of it drawing the moving playhead and meters |
 | The mixer alone, 16 tracks of cut-up clips at 48 kHz | 0.2% of one core (604× real time) |
 
 Decoded sound is kept in memory: about 23 MB per stereo minute at 48 kHz,
@@ -130,7 +133,7 @@ the first thing to change for long projects.
 MIDI and instruments, plug-in effects, automation, a tempo grid, live
 effects (adapters work offline, so they can't run in real time yet),
 latency measured by itself (`record.offset_ms` is set by hand), Windows and Linux downloads
-and CI. Recording hasn't been tried with a real microphone yet: its parts
+and CI (planned for 0.0.3). Recording hasn't been tried with a real microphone yet: its parts
 are tested, but the whole of it hasn't run. Run from a terminal, macOS asks
 for the terminal's microphone permission.
 

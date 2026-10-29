@@ -210,6 +210,39 @@ pub struct Shared {
     pub meters: Meters,
     /// Frames the device asked for while playing, for measuring.
     pub played: AtomicU64,
+    /// What the device reported, kept for the interface to say: the
+    /// error callback can run on the sound thread, so it only counts.
+    pub trouble: Trouble,
+}
+
+/// Problems a sound device reported since the interface last looked.
+#[derive(Default)]
+pub struct Trouble {
+    /// The device went away or must be opened again.
+    lost: AtomicBool,
+    /// The system switched its output and the stream followed it.
+    rerouted: AtomicBool,
+    /// Times the device wasn't given sound in time (a dropout).
+    dropouts: AtomicU64,
+}
+
+impl Trouble {
+    pub fn report(&self, kind: cpal::ErrorKind) {
+        use cpal::ErrorKind::*;
+        match kind {
+            DeviceChanged => self.rerouted.store(true, Ordering::Release),
+            Xrun => {
+                self.dropouts.fetch_add(1, Ordering::Relaxed);
+            }
+            DeviceNotAvailable | StreamInvalidated | HostUnavailable | PermissionDenied => self.lost.store(true, Ordering::Release),
+            _ => {}
+        }
+    }
+
+    /// (lost, rerouted, dropouts), cleared.
+    pub fn take(&self) -> (bool, bool, u64) {
+        (self.lost.swap(false, Ordering::AcqRel), self.rerouted.swap(false, Ordering::AcqRel), self.dropouts.swap(0, Ordering::Relaxed))
+    }
 }
 
 pub struct Engine {
@@ -236,6 +269,7 @@ impl Engine {
             pending: Mutex::new(None),
             meters: Meters::new(),
             played: AtomicU64::new(0),
+            trouble: Trouble::default(),
         });
         let mut e = Self { rate: 48_000, channels: 2, device: None, config: None, stream: None, shared, sent: Vec::new(), error: None };
         let host = cpal::default_host();
@@ -307,6 +341,7 @@ impl Engine {
             return Err(self.error.clone().unwrap_or_else(|| "no sound output".into()));
         };
         let s = self.shared.clone();
+        let errors = self.shared.clone();
         let channels = usize::from(self.channels.max(1));
         let mut mix = Arc::new(Mix::empty());
         // Room for the largest buffer devices ask for, so it never grows
@@ -348,7 +383,8 @@ impl Engine {
                     // A seek from the interface meanwhile wins.
                     let _ = s.pos.compare_exchange(start, pos, Ordering::AcqRel, Ordering::Acquire);
                 },
-                |e| crate::log::error(format!("Sound: {e}")),
+                // Can run on the sound thread: only counted, never logged here.
+                move |e| errors.trouble.report(e.kind()),
                 None,
             )
             .map_err(|e| e.to_string())
@@ -434,6 +470,18 @@ mod tests {
         assert_eq!(m.take(3), 0.75);
         assert_eq!(m.take(3), 0.0);
         m.hit(METERS + 5, 1.0);
+    }
+
+    #[test]
+    fn trouble_is_counted_then_cleared() {
+        let t = Trouble::default();
+        t.report(cpal::ErrorKind::Xrun);
+        t.report(cpal::ErrorKind::Xrun);
+        t.report(cpal::ErrorKind::DeviceChanged);
+        assert_eq!(t.take(), (false, true, 2));
+        t.report(cpal::ErrorKind::DeviceNotAvailable);
+        assert_eq!(t.take(), (true, false, 0));
+        assert_eq!(t.take(), (false, false, 0));
     }
 }
 

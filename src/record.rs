@@ -15,6 +15,7 @@ use std::time::Duration;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample};
 
+use crate::engine::Trouble;
 use crate::media::{BLOCK, level};
 use crate::wav::{Depth, Writer};
 
@@ -65,6 +66,12 @@ pub struct Live {
     pub level: AtomicU32,
     /// Samples the ring had no room for (the disk fell behind).
     pub dropped: AtomicU64,
+    /// Whether any sample so far wasn't exactly zero. A real input always
+    /// hisses a little; macOS sends pure silence when the microphone isn't
+    /// allowed.
+    pub heard: AtomicBool,
+    /// What the input reported (see `engine::Trouble`).
+    pub trouble: Trouble,
 }
 
 pub struct Recording {
@@ -77,6 +84,7 @@ pub struct Recording {
     /// Where on the project it began, and on which track.
     pub at: f64,
     pub track: usize,
+    pub started: std::time::Instant,
 }
 
 impl Recording {
@@ -95,7 +103,14 @@ impl Recording {
         let (rate, channels) = (config.sample_rate, usize::from(config.channels.max(1)));
         let keep = channels.min(2);
         let ring = Arc::new(Ring::new(rate as usize * keep * 2));
-        let live = Arc::new(Live { frames: AtomicU64::new(0), peaks: Mutex::new(Vec::new()), level: AtomicU32::new(0), dropped: AtomicU64::new(0) });
+        let live = Arc::new(Live {
+            frames: AtomicU64::new(0),
+            peaks: Mutex::new(Vec::new()),
+            level: AtomicU32::new(0),
+            dropped: AtomicU64::new(0),
+            heard: AtomicBool::new(false),
+            trouble: Trouble::default(),
+        });
         let stream = match supported.sample_format() {
             cpal::SampleFormat::F32 => input::<f32>(&device, &config, channels, keep, ring.clone(), live.clone()),
             cpal::SampleFormat::I16 => input::<i16>(&device, &config, channels, keep, ring.clone(), live.clone()),
@@ -121,6 +136,9 @@ impl Recording {
                         continue;
                     }
                     file.write(&buf[..n]).map_err(|e| e.to_string())?;
+                    if buf[..n].iter().any(|&s| s != 0.0) {
+                        live.heard.store(true, Ordering::Relaxed);
+                    }
                     let mut fresh = Vec::new();
                     for frame in buf[..n].chunks(keep) {
                         peak = frame.iter().fold(peak, |m, s| m.max(s.abs()));
@@ -139,7 +157,7 @@ impl Recording {
             })
         };
         stream.play().map_err(|e| e.to_string())?;
-        Ok(Self { _stream: stream, stop, writer, live, rate, path, at, track })
+        Ok(Self { _stream: stream, stop, writer, live, rate, path, at, track, started: std::time::Instant::now() })
     }
 
     pub fn seconds(&self) -> f64 {
@@ -154,6 +172,10 @@ impl Recording {
         let dropped = self.live.dropped.load(Ordering::Relaxed);
         if dropped > 0 {
             crate::log::error(format!("The disk fell behind while recording: {dropped} samples were lost."));
+        }
+        let (_, _, dropouts) = self.live.trouble.take();
+        if dropouts > 0 {
+            crate::log::error(format!("The input reported {} while recording.", crate::dropouts_text(dropouts)));
         }
         Ok(self.path)
     }
@@ -170,6 +192,7 @@ fn input<T: SizedSample + Send + 'static>(
 where
     f32: FromSample<T>,
 {
+    let errors = live.clone();
     device
         .build_input_stream::<T, _, _>(
             *config,
@@ -181,7 +204,8 @@ where
                     live.dropped.fetch_add((frames * keep - n) as u64, Ordering::Relaxed);
                 }
             },
-            |e| crate::log::error(format!("Recording: {e}")),
+            // Can run on the sound thread: only counted, never logged here.
+            move |e| errors.trouble.report(e.kind()),
             None,
         )
         .map_err(|e| e.to_string())

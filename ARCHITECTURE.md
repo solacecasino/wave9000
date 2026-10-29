@@ -39,8 +39,9 @@ background work exist, and none of them touches the project:
 - **Export**: a thread renders the mix into a file.
 
 Each calls `request_repaint` when there's something new. While playing or
-recording the window redraws every frame for the playhead and meters;
-otherwise nothing redraws on a timer, so an idle workstation uses no CPU.
+recording the window redraws `look.playback_fps` times a second (30) for
+the playhead and meters; otherwise nothing redraws on a timer, so an idle
+workstation uses no CPU.
 
 ## Sound
 
@@ -68,6 +69,12 @@ track passes through bit for bit. Where a clip starts or ends inside its
 file (a cut), its sound fades over 96 frames so the cut doesn't click.
 
 The device is opened on the first play and paused when playing stops.
+With no output named in settings.toml, the stream follows the system's
+output as it changes (headphones, AirPods). What a device reports goes
+into `Trouble`, since its error callback can run on the sound thread: it
+only counts dropouts and flags a lost device there. The interface logs
+them, and on a lost device stops and opens the output again; a file still
+being read at the old rate is read again at the new one.
 
 ## The maths
 
@@ -94,7 +101,9 @@ lock-free ring, two seconds deep, and counts anything that didn't fit. A
 writer thread empties the ring into a 32-bit float WAV, and keeps the
 waveform so far and a level for the interface. Stopping finishes the file
 and reads it back like any other file, onto the recording track at the
-time recording began (less `record.offset_ms`).
+time recording began (less `record.offset_ms`). An input that gives
+nothing but exact zeros for a second and a half is how macOS answers when
+the microphone isn't allowed, so wave9000 says where to allow it.
 
 Takes go to `<project> takes/` beside a saved project, or to `takes/` in
 the settings folder.

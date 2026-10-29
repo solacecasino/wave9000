@@ -65,7 +65,9 @@ pub enum Place {
 }
 
 /// A file that's been read, or why it couldn't be, and where it goes.
-type Loaded = (PathBuf, Result<(Media, Sound), String>, Place);
+/// A file read on another thread: its path, what was read and at which
+/// rate, and where it goes.
+type Loaded = (PathBuf, Result<(Media, Sound), String>, u32, Place);
 
 /// Track view state.
 pub struct View {
@@ -110,6 +112,8 @@ pub struct App {
     /// The project changed since the mixer last got a copy.
     mix_dirty: bool,
     recording: Option<Recording>,
+    /// Said once per take that the input gives only silence.
+    silence_warned: bool,
     /// What the meters show: each track's level, falling back slowly, and
     /// the master's last.
     levels: Vec<f32>,
@@ -296,6 +300,7 @@ impl App {
             engine: Engine::new(""),
             mix_dirty: true,
             recording: None,
+            silence_warned: false,
             levels: vec![0.0; METERS + 1],
             view: View { pps: 40.0, scroll: 0.0, down: 0.0, width: 800.0, fit: false, drag: panels::Drag::None },
             file: None,
@@ -712,11 +717,12 @@ impl App {
             return;
         }
         let path = record::next_take(&dir);
-        let ctx = self.ctx.clone();
+        let (ctx, frame) = (self.ctx.clone(), self.playback_frame());
         let at = self.playhead();
-        match Recording::start(&self.settings.sound.input, path, at, track, move || ctx.request_repaint()) {
+        match Recording::start(&self.settings.sound.input, path, at, track, move || ctx.request_repaint_after(frame)) {
             Ok(r) => {
                 log::info(format!("Recording into {} at {} Hz", r.path.display(), r.rate));
+                self.silence_warned = false;
                 self.recording = Some(r);
                 if self.mix_dirty {
                     self.push_mix();
@@ -881,15 +887,21 @@ impl App {
         let (tx, tools, rate, ctx) = (self.loaded_tx.clone(), self.tools.clone(), self.engine.rate, self.ctx.clone());
         std::thread::spawn(move || {
             let r = media::load(tools.as_ref(), &path, rate).map_err(|e| format!("{}: {e}", path.display()));
-            let _ = tx.send((path, r, place));
+            let _ = tx.send((path, r, rate, place));
             ctx.request_repaint();
         });
     }
 
     fn take_loaded(&mut self) {
-        while let Ok((path, r, place)) = self.loaded_rx.try_recv() {
+        while let Ok((path, r, rate, place)) = self.loaded_rx.try_recv() {
             if let Some(i) = self.reading.iter().position(|p| *p == path) {
                 self.reading.remove(i);
+            }
+            // The output changed rate while it was being read: it would
+            // play at the wrong pitch, so it's read again.
+            if rate != self.engine.rate {
+                self.read(path, place);
+                continue;
             }
             match r {
                 Ok((m, sound)) => {
@@ -1047,6 +1059,34 @@ impl App {
         self.mix_dirty = false;
     }
 
+    /// What the sound output and input reported: a device that went away
+    /// stops playing (and recording) instead of leaving a frozen playhead.
+    fn watch_sound(&mut self) {
+        let (lost, rerouted, dropouts) = self.engine.shared.trouble.take();
+        if rerouted {
+            log::info("Sound: following the system's new output.");
+        }
+        if dropouts > 0 {
+            log::info(format!("Sound: {} (the output wasn't given sound in time).", dropouts_text(dropouts)));
+        }
+        if lost {
+            self.stop();
+            self.open_output();
+            self.say("The sound output went away, so playing stopped. Press play to go on with the output there is now.");
+        }
+        let Some(r) = &self.recording else { return };
+        let (input_lost, _, _) = r.live.trouble.take();
+        // Pure silence, or nothing at all, for a second and a half.
+        let silent = r.started.elapsed().as_secs_f64() > 1.5 && !r.live.heard.load(Ordering::Relaxed);
+        if input_lost {
+            self.stop();
+            self.say("The sound input went away, so recording stopped. What was recorded is kept.");
+        } else if silent && !self.silence_warned {
+            self.silence_warned = true;
+            self.say("Nothing at all is coming from the input. If macOS asked about the microphone and it wasn't allowed, allow wave9000 in System Settings → Privacy & Security → Microphone, then record again.");
+        }
+    }
+
     /// While playing: meters, the playhead's view, and stopping at the end.
     fn follow_playback(&mut self, ctx: &egui::Context) {
         let dt = ctx.input(|i| i.stable_dt).clamp(0.0, 0.1);
@@ -1066,9 +1106,17 @@ impl App {
             self.stop();
             self.seek(self.duration());
         }
+        // Paced, not every frame the screen can show: each frame redraws
+        // the playhead's column and the meters, and that's what playing
+        // costs.
         if playing || moving || self.recording.is_some() {
-            ctx.request_repaint();
+            ctx.request_repaint_after(self.playback_frame());
         }
+    }
+
+    /// How long to wait between frames while playing or recording.
+    fn playback_frame(&self) -> std::time::Duration {
+        std::time::Duration::from_secs_f32(1.0 / self.settings.look.playback_fps.clamp(1.0, 240.0))
     }
 
     fn save_layout(&self) {
@@ -1207,6 +1255,7 @@ impl shell::App for App {
         if self.mix_dirty {
             self.push_mix();
         }
+        self.watch_sound();
         self.follow_playback(&ctx);
 
         if self.session_dirty && !ctx.input(|i| i.pointer.any_down()) && !self.engine.playing() {
@@ -1219,6 +1268,11 @@ impl shell::App for App {
             self.adapters.stop_all();
         }
     }
+}
+
+/// "a dropout", "3 dropouts".
+pub fn dropouts_text(n: u64) -> String {
+    if n == 1 { "a dropout".into() } else { format!("{n} dropouts") }
 }
 
 fn open_folder(dir: &Path) {

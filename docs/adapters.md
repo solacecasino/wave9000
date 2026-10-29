@@ -17,7 +17,7 @@ An adapter can add:
 - **export formats**, which need no program at all: an adapter can be only
   an `adapter.toml` of presets.
 
-0.0.1 comes with no adapters, and there's no catalog yet.
+wave9000 comes with no adapters yet, and there's no catalog.
 
 ## Installing
 
