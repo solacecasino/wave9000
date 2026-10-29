@@ -4,7 +4,8 @@ A bare, modular audio workstation. Record and arrange sound on tracks, mix
 it, export it. Every panel can be moved, added or removed, the way
 foobar2000 lets you rearrange its window. It's the sibling of
 [splice9000](https://github.com/solacecasino/splice9000), the video editor,
-and opens its projects.
+and opens its projects. Its sister is
+[grace9000](https://github.com/solacecasino/grace9000), the photo editor.
 
 ![wave9000](docs/screenshot.png)
 
