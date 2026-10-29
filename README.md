@@ -11,19 +11,23 @@ and opens its projects.
 It's a prototype (0.0.1): tracks, clips, a mixer, recording, export.
 Nothing else is in the app.
 
-## Running it
+## Installing
 
-There's no download yet. Build it with Rust:
+1. Download `wave9000-<version>-macos-universal.zip` from
+   [Releases](https://github.com/solacecasino/wave9000/releases) (Apple
+   Silicon and Intel Macs, macOS 11 or later).
+2. Unzip it and move wave9000.app to Applications.
+3. The first time, **right-click → Open**: the app isn't signed with an
+   Apple developer certificate, so macOS asks once. The first time you
+   record, macOS asks to let it use the microphone.
+4. Install [ffmpeg](https://ffmpeg.org) to add files other than WAV:
+   `brew install ffmpeg`. wave9000 runs it as a separate program for
+   reading and writing files, so no codecs are built in. Without it,
+   recording, WAV files at your sound device's rate and WAV export still
+   work.
 
-```sh
-cargo build --release
-./target/release/wave9000
-```
-
-Install [ffmpeg](https://ffmpeg.org) to add files other than WAV
-(`brew install ffmpeg`). wave9000 runs it as a separate program for reading
-and writing files, so no codecs are built in. Without it, recording, WAV
-files at your sound device's rate and WAV export still work.
+Windows and Linux build from the same code (`cargo build --release`) but
+have no downloads yet.
 
 ## Making something
 
@@ -124,7 +128,7 @@ the first thing to change for long projects.
 
 MIDI and instruments, plug-in effects, automation, a tempo grid, live
 effects (adapters work offline, so they can't run in real time yet),
-latency measured by itself (`record.offset_ms` is set by hand), downloads
+latency measured by itself (`record.offset_ms` is set by hand), Windows and Linux downloads
 and CI. Recording hasn't been tried with a real microphone yet: its parts
 are tested, but the whole of it hasn't run. Run from a terminal, macOS asks
 for the terminal's microphone permission.
