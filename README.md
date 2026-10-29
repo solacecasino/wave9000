@@ -9,7 +9,7 @@ and opens its projects. Its sister is
 
 ![wave9000](docs/screenshot.png)
 
-It's a prototype (0.0.2): tracks, clips, a mixer, recording, export.
+It's a prototype (0.0.3): tracks, clips, a mixer, recording, export.
 Nothing else is in the app.
 
 ## Installing
@@ -30,8 +30,20 @@ Nothing else is in the app.
    recording, WAV files at your sound device's rate and WAV export still
    work.
 
-Windows and Linux build from the same code (`cargo build --release`);
-their downloads are planned for 0.0.3.
+**Windows** (x64 and Arm): unzip `wave9000-<version>-windows-<x64|arm64>.zip`
+anywhere and run `wave9000.exe`. SmartScreen may ask once, since the app
+isn't signed: **More info → Run anyway**. Put ffmpeg on your PATH (for
+example `winget install ffmpeg`). If recording gives only silence, allow
+apps to use the microphone in **Settings → Privacy & security →
+Microphone**.
+
+**Linux** (x64 and Arm): unpack `wave9000-<version>-linux-<x64|arm64>.tar.gz`
+and run `./install.sh` inside it to add wave9000 to your app menu, and
+under **Open With** for sound files (`./install.sh --remove` takes it out;
+nothing outside your home folder changes). It plays and records through
+ALSA, so PipeWire and PulseAudio systems work through their ALSA plugin,
+which desktops have. Install ffmpeg from your distribution
+(`sudo apt install ffmpeg`).
 
 ## Making something
 
@@ -132,10 +144,13 @@ the first thing to change for long projects.
 
 MIDI and instruments, plug-in effects, automation, a tempo grid, live
 effects (adapters work offline, so they can't run in real time yet),
-latency measured by itself (`record.offset_ms` is set by hand), Windows and Linux downloads
-and CI (planned for 0.0.3). Recording hasn't been tried with a real microphone yet: its parts
-are tested, but the whole of it hasn't run. Run from a terminal, macOS asks
-for the terminal's microphone permission.
+latency measured by itself (`record.offset_ms` is set by hand).
+
+The Windows and Linux downloads are built, tested and started by CI, but
+those machines have no sound devices, so wave9000 hasn't played sound on
+Windows or Linux yet. Recording hasn't been tried with a real microphone
+anywhere: its parts are tested, but the whole of it hasn't run. Run from a
+terminal, macOS asks for the terminal's microphone permission.
 
 ## License
 

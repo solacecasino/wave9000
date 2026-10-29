@@ -22,7 +22,7 @@ For people changing the code. The ideals behind these choices are in
 | `hosting.rs` | what the app does for adapters: their requests, prompts, menus, keys |
 | `keys.rs` | `COMMANDS`, the one list of commands, and `keys.toml` |
 | `settings.rs` | `settings.toml` |
-| `watch.rs` | notices saved config files (from Leaf) |
+| `watch.rs` | notices saved config files: kqueue, inotify, or Windows' change notifications (from Leaf) |
 | `shell/` | the window, drawn by the CPU (from Folio) |
 | `log.rs` | the Log panel's lines |
 
