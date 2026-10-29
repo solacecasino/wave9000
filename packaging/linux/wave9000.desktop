@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=wave9000
+GenericName=Audio Workstation
+Comment=A bare, modular audio workstation
+Exec=wave9000
+Icon=wave9000
+Terminal=false
+Categories=AudioVideo;Audio;Recorder;
+Keywords=audio;daw;record;mix;tracks;
+StartupWMClass=wave9000
