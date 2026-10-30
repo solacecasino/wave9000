@@ -1155,9 +1155,6 @@ impl App {
         self.open_paths(paths);
     }
 
-    /// Opens dropped files, or files named when wave9000 was started:
-    /// adapters are offered for install, a project opens, splice9000
-    /// projects bring their sound, and sound files go on new tracks.
     /// Opens the selected media in splice9000 when it's a video: the
     /// picture's sister.
     fn video_to_splice9000(&mut self) {
@@ -1173,6 +1170,9 @@ impl App {
         }
     }
 
+    /// Opens dropped files, or files named when wave9000 was started:
+    /// adapters are offered for install, a project opens, splice9000
+    /// projects bring their sound, and sound files go on new tracks.
     fn open_paths(&mut self, paths: Vec<PathBuf>) {
         if paths.is_empty() {
             return;
