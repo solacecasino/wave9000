@@ -84,6 +84,29 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSHumanReadableCopyright</key><string>© 2026 Vishal Mohan · MIT License</string>
+  <!-- Its own files open here by double-click; the media only lists it
+       under Open With, so no other app's defaults change. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>wave9000 Session</string>
+      <key>CFBundleTypeExtensions</key><array><string>wave</string></array>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Owner</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>splice9000 Project</string>
+      <key>CFBundleTypeExtensions</key><array><string>splice</string></array>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Sound</string>
+      <key>CFBundleTypeExtensions</key><array><string>wav</string><string>mp3</string><string>flac</string><string>aiff</string><string>aif</string><string>m4a</string><string>aac</string><string>ogg</string><string>oga</string><string>opus</string><string>wma</string><string>caf</string></array>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST

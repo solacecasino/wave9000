@@ -12,6 +12,7 @@ mod adapters;
 mod engine;
 mod export;
 mod hosting;
+mod incoming;
 mod keys;
 mod layout;
 mod log;
@@ -156,6 +157,8 @@ fn main() {
         println!("wave9000 {}", env!("CARGO_PKG_VERSION"));
         return;
     }
+    // Files to open: from the command line, or (macOS) the system.
+    incoming::listen_early();
     let dir = config_dir();
     let _ = std::fs::create_dir_all(&dir);
     crash_report(&dir);
@@ -247,6 +250,7 @@ fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
 
 impl App {
     fn new(ctx: &egui::Context, dir: PathBuf) -> Self {
+        incoming::started(ctx);
         for (name, text) in [("settings.toml", settings::EXAMPLE), ("keys.toml", keys::EXAMPLE)] {
             let path = dir.join(name);
             if !path.exists() {
@@ -1188,6 +1192,7 @@ impl shell::App for App {
             self.load_config(false);
         }
         self.dropped_files(&ctx);
+        self.open_paths(incoming::take());
         self.serve_adapters();
         let mut commands = std::mem::take(&mut self.queue);
         commands.extend(self.menu.take());
