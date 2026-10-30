@@ -7,6 +7,12 @@ foobar2000 lets you rearrange its window. It's the sibling of
 and opens its projects. Its sister is
 [grace9000](https://github.com/solacecasino/grace9000), the photo editor.
 
+The whole 9000 series: [text9000](https://github.com/solacecasino/text9000)
+(writing), [splice9000](https://github.com/solacecasino/splice9000) (video),
+[wave9000](https://github.com/solacecasino/wave9000) (sound),
+[grace9000](https://github.com/solacecasino/grace9000) (photos) and
+[leaf9000](https://github.com/solacecasino/leaf9000) (comics and books).
+
 ![wave9000](docs/screenshot.png)
 
 It's a prototype (0.0.3): tracks, clips, a mixer, recording, export.
