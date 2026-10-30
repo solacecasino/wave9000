@@ -9,23 +9,24 @@
 //! `engine`), so nothing the interface does can make the sound stutter.
 
 mod adapters;
+use adapters::Sections;
+// The 9000 series' shared core: the window, the adapter host, the sisters.
+#[cfg(target_os = "macos")]
+use core9000::incoming;
+use core9000::{log, shell, watch};
 mod engine;
 mod export;
 mod hosting;
-mod incoming;
 mod keys;
 mod layout;
-mod log;
 mod media;
 mod menu;
 mod panels;
 mod project;
 mod record;
 mod settings;
-mod shell;
 mod theme;
 mod wav;
-mod watch;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -153,6 +154,7 @@ pub struct App {
 }
 
 fn main() {
+    core9000::init(&adapters::APP);
     if std::env::args().nth(1).as_deref() == Some("--version") {
         println!("wave9000 {}", env!("CARGO_PKG_VERSION"));
         return;
@@ -250,6 +252,7 @@ fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
 
 impl App {
     fn new(ctx: &egui::Context, dir: PathBuf) -> Self {
+        core9000::init(&adapters::APP);
         incoming::started(ctx);
         for (name, text) in [("settings.toml", settings::EXAMPLE), ("keys.toml", keys::EXAMPLE)] {
             let path = dir.join(name);
@@ -274,7 +277,7 @@ impl App {
         let (tx, adapter_rx) = channel();
         let adapters = {
             let (tx, ctx) = (std::sync::Mutex::new(tx), ctx.clone());
-            let env = adapters::Env { config: dir.clone(), builtin: adapters::builtin_dir(), ffmpeg: None, ffprobe: None };
+            let env = adapters::Env { config: dir.clone(), builtin: adapters::builtin_dir(), ..adapters::Env::default() };
             adapters::Host::new(env, move |m| {
                 let _ = tx.lock().unwrap_or_else(|e| e.into_inner()).send(m);
                 ctx.request_repaint();
@@ -367,8 +370,16 @@ impl App {
             }
             self.encoders = None;
             // Adapters get the same ffmpeg.
-            self.adapters.env.ffmpeg = self.tools.as_ref().map(|t| t.ffmpeg.clone());
-            self.adapters.env.ffprobe = self.tools.as_ref().map(|t| t.ffprobe.clone());
+            // Adapters use the same ffmpeg, so they need none of their own.
+            let (mut init, mut vars) = (serde_json::Map::new(), Vec::new());
+            for (key, path) in [("ffmpeg", self.tools.as_ref().map(|t| &t.ffmpeg)), ("ffprobe", self.tools.as_ref().map(|t| &t.ffprobe))] {
+                init.insert(key.into(), path.map_or(serde_json::Value::Null, |p| p.to_string_lossy().into()));
+                if let Some(p) = path {
+                    vars.push((format!("WAVE9000_{}", key.to_uppercase()), p.clone().into_os_string()));
+                }
+            }
+            self.adapters.env.init = init;
+            self.adapters.env.vars = vars;
         }
         if new_output && self.recording.is_none() {
             self.open_output();
@@ -637,6 +648,7 @@ impl App {
                 self.save_layout();
             }
             "config" => open_folder(&self.dir),
+            "sister splice9000" => self.video_to_splice9000(),
             "quit" => self.ctx.send_viewport_cmd(ViewportCommand::Close),
             other => log::error(format!("No command called \"{other}\"")),
         }
@@ -1148,9 +1160,32 @@ impl App {
     /// Opens dropped files, or files named when wave9000 was started:
     /// adapters are offered for install, a project opens, splice9000
     /// projects bring their sound, and sound files go on new tracks.
+    /// Opens the selected media in splice9000 when it's a video: the
+    /// picture's sister.
+    fn video_to_splice9000(&mut self) {
+        let m = self.selected_media.or_else(|| self.selected_clip.and_then(|(t, c)| self.project.tracks.get(t)?.clips.get(c).map(|c| c.media)));
+        let Some(path) = m.and_then(|m| self.project.media.get(m)).map(|m| m.path.clone()) else {
+            return self.say("Select a video's sound to open the video in splice9000.");
+        };
+        if !core9000::sisters::is(&path, core9000::sisters::VIDEO) {
+            return self.say(format!("{} is sound only; splice9000 opens videos.", path.display()));
+        }
+        if let Err(e) = core9000::sisters::get("splice9000").expect("a sister").open(&[&path], None) {
+            self.say(e);
+        }
+    }
+
     fn open_paths(&mut self, paths: Vec<PathBuf>) {
         if paths.is_empty() {
             return;
+        }
+        // wave9000 takes sound, its projects, and splice9000's projects and
+        // videos (for their sound); photos, documents and comics go to the
+        // sisters that open them.
+        use core9000::sisters::{SOUND, VIDEO, is};
+        let (paths, problems) = core9000::sisters::hand_off(paths, |p| is(p, SOUND) || is(p, VIDEO) || is(p, &["wave", "splice"]) || adapters::is_package(p));
+        for p in problems {
+            self.say(p);
         }
         let (packages, paths): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| adapters::is_package(p));
         for p in packages {

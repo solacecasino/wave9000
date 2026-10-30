@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde_json::{Value, json};
 
-use crate::adapters::{self, EDIT_CHANGE, EDIT_READ, Manifest, Message, StartError, command_name, parse_command};
+use crate::adapters::{self, Sections, EDIT_CHANGE, EDIT_READ, Manifest, Message, StartError, command_name, parse_command};
 use crate::layout::Side;
 use crate::project::{Clip, Track};
 use crate::{App, log, menu};
@@ -198,11 +198,11 @@ impl App {
         let may = |p: &str| self.adapters.all[i].has(p);
         let need = |p: &str| if may(p) { Ok(()) } else { Err(format!("{method} needs the \"{p}\" permission in adapter.toml")) };
         let text = |key: &str| params.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
+        // What every sister answers the same way: `log`, `sisters.*`.
+        if let Some(answer) = core9000::family::call(adapter, method, &params) {
+            return Some(answer);
+        }
         Some(match method {
-            "log" => {
-                log::info(format!("{adapter}: {}", text("message")));
-                Ok(Value::Null)
-            }
             "notify" => {
                 self.say(format!("{adapter}: {}", text("text")));
                 Ok(Value::Null)

@@ -6,8 +6,11 @@ description = "A bare, modular audio workstation: record and arrange sound on tr
 license = "MIT"
 
 [dependencies]
+# The 9000 series' shared core: the window, the adapter host, the family
+# protocol and the sisters.
+core9000 = { git = "https://github.com/solacecasino/core9000", tag = "v0.1.1" }
 # The interface (egui), the window and input (winit, egui-winit), and the
-# pixels: drawn by the CPU (src/shell, from Folio), so no graphics driver is
+# pixels: drawn by the CPU (core9000's shell, from Folio), so no graphics driver is
 # loaded. Audio files are decoded and encoded by the system's ffmpeg, run as
 # a separate program, so no codecs are linked in; the mixer is our own.
 egui = { version = "0.37.0", features = ["default_fonts"] }

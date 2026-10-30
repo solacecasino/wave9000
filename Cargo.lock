@@ -642,6 +642,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "core9000"
+version = "0.1.1"
+source = "git+https://github.com/solacecasino/core9000?tag=v0.1.1#1f21fd6492fd3d97879085800cf3020d6b411b76"
+dependencies = [
+ "accesskit_winit",
+ "egui",
+ "egui-winit",
+ "libc",
+ "objc2 0.6.5",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
+ "objc2-quartz-core 0.3.2",
+ "raw-window-handle",
+ "serde",
+ "serde_json",
+ "softbuffer",
+ "toml",
+ "trash",
+ "winit",
+ "zip",
+]
+
+[[package]]
 name = "coreaudio-rs"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3242,6 +3265,7 @@ name = "wave9000"
 version = "0.0.4"
 dependencies = [
  "accesskit_winit",
+ "core9000",
  "cpal",
  "egui",
  "egui-winit",

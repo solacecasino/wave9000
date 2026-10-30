@@ -3,6 +3,7 @@
 
 use egui::{Align, Align2, Color32, CursorIcon, FontId, Id, Layout, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2};
 
+use crate::adapters::Sections;
 use crate::layout::Part;
 use crate::project::{Clip, Track, db};
 use crate::theme::{Palette, REC};
@@ -1009,8 +1010,8 @@ fn adapters_panel(app: &mut App, ui: &mut Ui) {
                 format!("Can {}", m.permissions.iter().map(|p| crate::adapters::describe(p)).collect::<Vec<_>>().join("; "))
             };
             ui.label(RichText::new(can).small().color(pal.weak));
-            if !m.exports.is_empty() {
-                let list: Vec<&str> = m.exports.iter().map(|e| e.label.as_str()).collect();
+            if !m.extra.exports.is_empty() {
+                let list: Vec<&str> = m.extra.exports.iter().map(|e| e.label.as_str()).collect();
                 ui.label(RichText::new(format!("Export formats: {}", list.join(", "))).small().color(pal.weak));
             }
             ui.horizontal_wrapped(|ui| {

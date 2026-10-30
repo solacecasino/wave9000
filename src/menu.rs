@@ -11,7 +11,7 @@ use crate::layout::PANELS;
 /// "export as" the export formats adapters add. Adapters' commands go at
 /// the end of the menu they ask for, or of Adapters.
 pub const MENUS: &[(&str, &[&str])] = &[
-    ("File", &["new", "open", "-", "save", "save as", "-", "import", "import splice", "-", "export", "export as"]),
+    ("File", &["new", "open", "-", "save", "save as", "-", "import", "import splice", "-", "export", "export as", "-", "sister splice9000"]),
     ("Edit", &["undo", "redo", "-", "split", "delete"]),
     ("Track", &["track new", "track delete", "-", "track mute", "track solo", "track arm"]),
     ("View", &["panels", "-", "layout edit", "layout reset", "-", "zoom in", "zoom out", "zoom fit"]),
@@ -56,6 +56,7 @@ pub fn label(command: &str) -> String {
         "cut previous" => "Previous Clip Edge",
         "cut next" => "Next Clip Edge",
         "config" => "Open Settings Folder",
+        "sister splice9000" => "Open Video in splice9000",
         "install adapter" => "Install Adapter…",
         "quit" => "Quit wave9000",
         other => other,

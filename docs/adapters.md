@@ -162,6 +162,48 @@ Times are seconds. `at` is where a clip starts on its track; `src_in` and
 Gains are dB; -90 or below is silence. `rate` is the sound device's, which
 every file is played at.
 
+
+## The 9000 family
+
+wave9000 is one of five sisters: text9000, splice9000, wave9000, grace9000 and
+leaf9000. Their adapters all speak the same **family protocol**, from the
+shared [core9000](https://github.com/solacecasino/core9000).
+wave9000's own requests, above, come on top.
+
+**What's the same in every sister:**
+
+- The framing: JSON lines, with requests that have an `id`.
+- From the app: `initialize`, `command`, `event` and `shutdown`.
+- From the adapter: `log`, `notify`, `panel.set` and the `ui.*` prompts.
+
+**`initialize` also carries these fields:**
+
+| Field | What it is |
+|---|---|
+| `app` | `"wave9000"` |
+| `version` | The app's version |
+| `family` | The family protocol's version, `1` |
+| `sisters` | All five apps' names |
+
+The fields adapters already read stay as they were.
+
+**Two more requests, answered by every sister:**
+
+| Method | Params | Result | Permission |
+|---|---|---|---|
+| `sisters.list` | | `[{"name", "kind", "installed", "opens"}]`: each sister, whether it's installed, and the file extensions it opens | none |
+| `sister.open` | `app` (a sister's name), `paths` | `null`. Opens the files in that sister app, or says it isn't installed and where to get it | none |
+
+**`apps` in adapter.toml.** An adapter made for some sisters says which:
+
+```toml
+apps = ["splice9000", "wave9000"]
+```
+
+Any other sister refuses to install it, and says which apps it's for. Left
+out, any sister that installs it runs it. An adapter that uses only the
+family messages can name all five.
+
 ## Versions
 
 `initialize` says which protocol version wave9000 speaks. New versions only
