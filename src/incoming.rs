@@ -1,9 +1,9 @@
-//! Files the system hands wave9000: named on the command line (Windows,
-//! Linux, or a sister 9000 app starting it), or opened from Finder, the
-//! Dock or `open -a` (macOS, as Apple Events, including the one that
-//! launches it). They're opened like files dropped on the window.
+//! Files macOS hands wave9000 while it runs or as it starts: opened from
+//! Finder, the Dock, `open -a` or a sister 9000 app, as Apple Events
+//! (including the one that launches it). They're opened like files dropped
+//! on the window. Files named on the command line are read by `App::new`,
+//! on every system.
 
-use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
@@ -11,6 +11,7 @@ static PENDING: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 static WAKE: OnceLock<egui::Context> = OnceLock::new();
 
 /// Queues a file and wakes the window to open it.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn deliver(path: PathBuf) {
     PENDING.lock().unwrap_or_else(|e| e.into_inner()).push(path);
     if let Some(ctx) = WAKE.get() {
@@ -23,18 +24,9 @@ pub fn take() -> Vec<PathBuf> {
     std::mem::take(&mut *PENDING.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-/// The files named on the command line (after the program), leaving out
-/// options such as `--version` and the `-psn_…` old macOS adds.
-pub fn files_in(args: impl IntoIterator<Item = OsString>) -> Vec<PathBuf> {
-    args.into_iter().skip(1).filter(|a| !a.to_string_lossy().starts_with('-')).map(PathBuf::from).collect()
-}
-
-/// Takes the command line's files and starts listening, before the event
-/// loop runs, so the event that launched the app isn't missed.
+/// Starts listening before the event loop runs, so the event that
+/// launched the app isn't missed.
 pub fn listen_early() {
-    for path in files_in(std::env::args_os()) {
-        deliver(path);
-    }
     #[cfg(target_os = "macos")]
     {
         mac::listen();
@@ -142,15 +134,6 @@ mod mac {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn files_on_the_command_line() {
-        let args = |a: &[&str]| files_in(a.iter().map(OsString::from));
-        assert_eq!(args(&["wave9000"]), Vec::<PathBuf>::new());
-        assert_eq!(args(&["wave9000", "/a/b c.wav"]), [PathBuf::from("/a/b c.wav")]);
-        assert_eq!(args(&["wave9000", "-psn_0_1234", "x.wav", "y.wav"]), [PathBuf::from("x.wav"), PathBuf::from("y.wav")]);
-        assert_eq!(args(&["wave9000", "--version"]), Vec::<PathBuf>::new());
-    }
 
     #[test]
     fn handed_files_are_taken_once() {
