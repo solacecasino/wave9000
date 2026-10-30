@@ -237,9 +237,16 @@ jobs:
           done
           if ! xdotool search --onlyvisible --name wave9000; then
             echo "::error::no wave9000 window after 30 s"
-            # What's on the screen, and where each of wave9000's threads is.
-            xwininfo -root -tree | head -40 || true
-            sudo apt-get install -y -qq gdb >/dev/null && sudo gdb -p $pid -batch -ex "thread apply all bt 12" 2>/dev/null | grep -E "^Thread|^#" | head -120 || true
+            # Where wave9000's threads are, from a build with symbols run the
+            # same way.
+            kill $pid || true
+            sudo apt-get install -y -qq gdb >/dev/null
+            CARGO_PROFILE_RELEASE_STRIP=false CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --release --quiet
+            ./target/release/wave9000 &
+            dpid=$!
+            sleep 20
+            xdotool search --name wave9000 || echo "no window, even hidden"
+            sudo gdb -p $dpid -batch -ex "thread apply all bt 25" 2>/dev/null | grep -E "^Thread|^#" | sed -E 's/ \(.*\) at / at /' | head -200 || true
             exit 1
           fi
           echo "window after $i tries"
