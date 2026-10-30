@@ -11,9 +11,7 @@
 mod adapters;
 use adapters::Sections;
 // The 9000 series' shared core: the window, the adapter host, the sisters.
-#[cfg(target_os = "macos")]
-use core9000::incoming;
-use core9000::{log, shell, watch};
+use core9000::{incoming, log, shell, watch};
 mod engine;
 mod export;
 mod hosting;

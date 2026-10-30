@@ -643,8 +643,8 @@ dependencies = [
 
 [[package]]
 name = "core9000"
-version = "0.1.1"
-source = "git+https://github.com/solacecasino/core9000?tag=v0.1.1#1f21fd6492fd3d97879085800cf3020d6b411b76"
+version = "0.1.2"
+source = "git+https://github.com/solacecasino/core9000?tag=v0.1.2#286307e1757da062425d891d9c4e8052df4e38e4"
 dependencies = [
  "accesskit_winit",
  "egui",
